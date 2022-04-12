@@ -82,10 +82,10 @@ public:
     ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru);
     ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru);
     ROS_INFO("[%d]\n\tTH: [%lf]", this->seq_number, this->curr_theta);
-*/
+
     ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
     ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
-
+*/
     this->seq_number++;
 
     geometry_msgs::TransformStamped transformStamped;
@@ -241,12 +241,12 @@ public:
       float robot_velocity = sqrt(pow(this->v_bx_ticks, 2) + pow(this->v_by_ticks, 2));
       float cos_x = cos(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
       float sin_x = sin(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
-
+/*
       ROS_INFO("\n[%d]velocity: [%lf]\n", this->seq_number, robot_velocity);
       ROS_INFO("[%d]cos: [%lf]\n", this->seq_number, cos_x);
       ROS_INFO("[%d]sin: [%lf]\n", this->seq_number, sin_x);
       ROS_INFO("[%d]deltaT: [%lf]\n", this->seq_number, delta_nsec_norm);
-
+*/
       float next_x_eu = this->curr_x_eu + this->v_bx_ticks*delta_nsec_norm;
       float next_y_eu = this->curr_y_eu + this->v_by_ticks*delta_nsec_norm;
 

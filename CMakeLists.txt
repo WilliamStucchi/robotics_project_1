@@ -5,6 +5,11 @@ project(test_pkg)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs message_generation geometry_msgs sensor_msgs)
 
 ## Add custom message and services and their dependencies
+add_message_files(
+  FILES
+  wheels_rpm.msg
+)
+
 add_service_files(
   FILES
   Position.srv
@@ -22,9 +27,9 @@ catkin_package(CATKIN_DEPENDS message_runtime)
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_executable(pose_reader src/robot_pose.cpp)
-add_dependencies(pose_reader ${catkin_EXPORTED_TARGETS})
-target_link_libraries(pose_reader ${catkin_LIBRARIES})
+add_executable(velocity_reader src/compute_rpm.cpp)
+add_dependencies(velocity_reader ${catkin_EXPORTED_TARGETS})
+target_link_libraries(velocity_reader ${catkin_LIBRARIES})
 
 add_executable(wheel_state_reader src/wheel_states.cpp)
 add_dependencies(wheel_state_reader ${catkin_EXPORTED_TARGETS})
