@@ -4,6 +4,7 @@
 #include "geometry_msgs/PoseStamped.h"
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
+#include "test_pkg/Position.h"
 
 #include <sstream>
 #include <cmath>
@@ -19,12 +20,39 @@ class WheelState {
 public:
 
   WheelState() {
-    // the parameter 'this' at the end is MANDATORY [ otherwise everything explodes :( ]
     this->sub_reader = this->n.subscribe("wheel_states", 1000, &WheelState::wheelStatePrint, this);
     this->sub_pose = this->n.subscribe("robot/pose", 1000, &WheelState::robotPoseCheck, this);
     this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
     this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1000);
+    this->position_server = this->n.advertiseService("reset_pos", &WheelState::positionService, this);
     this->first_read = 0;
+
+    this->n.getParam("/pos_x", this->curr_x_ru);
+    this->n.getParam("/pos_y", this->curr_y_ru);
+    this->n.getParam("/theta", this->curr_theta);
+
+    this->curr_x_eu = this->curr_x_ru;
+    this->curr_y_eu = this->curr_y_ru;
+
+  }
+
+  bool positionService(test_pkg::Position::Request &req, test_pkg::Position::Response &res) {
+    res.old_x_pos = this->curr_x_ru;
+    res.old_y_pos = this->curr_y_ru;
+    res.old_theta = this->curr_theta;
+
+    this->curr_x_ru = req.new_x_pos;
+    this->curr_y_ru = req.new_y_pos;
+    this->curr_theta = req.new_theta_pos;
+
+    this->curr_x_eu = this->curr_x_ru;
+    this->curr_y_eu = this->curr_y_ru;
+
+    ROS_INFO("Request to reset position to X:[%lf], Y:[%lf], TH:[%lf] - Responding with old position: X:[%lf], Y:[%lf], TH:[%lf]",
+            req.new_x_pos, req.new_y_pos, req.new_theta_pos, res.old_x_pos, res.old_y_pos, res.old_theta);
+
+    return true;
+
   }
 
   void publishVelocity() {
@@ -96,11 +124,6 @@ public:
   void wheelStatePrint(const sensor_msgs::JointState::ConstPtr &msg) {
 
     // ------------------- V & W
-    // To read data in msg i checked the documentation online http://wiki.ros.org/sensor_msgs
-    // There you can find the definition of the JointState type of message.
-    // It is divided in four categories: 'name', 'position', 'velocity' and 'effort'.
-    // Here I decided to print only the position and velocity (for our project i think they are the relevant ones).
-    // These categories are arrays so the content is accessed like down here.
 
     int curr_ticks_fl = 0;
     int curr_ticks_fr = 0;
@@ -118,11 +141,6 @@ public:
     float delta_nsec_norm;
 
     if(first_read == 0) {
-      this->curr_x_eu = 0;
-      this->curr_y_eu = 0;
-      this->curr_x_ru = 0;
-      this->curr_y_ru = 0;
-
       this->prev_ticks_fl = msg->position[0];
       this->prev_ticks_fr = msg->position[1];
       this->prev_ticks_rl = msg->position[2];
@@ -251,6 +269,7 @@ private:
   ros::Subscriber sub_pose;
   ros::Publisher pub_velocity;
   ros::Publisher pub_odometry;
+  ros::ServiceServer position_server;
   float w_bz_ticks;
   float v_bx_ticks;
   float v_by_ticks;
@@ -274,7 +293,6 @@ private:
 };
 
 int main(int argc, char **argv) {
-  // I don't know if it's relevant by i tend to use the name also in the 'type' category of the launch file
   ros::init(argc, argv, "wheel_state_reader");
 
   WheelState wheel_state;

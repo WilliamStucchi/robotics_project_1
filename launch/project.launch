@@ -1,5 +1,8 @@
 <launch>
 
+    <param name="pos_x" value="110.0" />
+    <param name="pos_y" value="110.0" />
+    <param name="theta" value="0.0" />
     <node pkg="test_pkg" type="pose_reader" name="my_pose_reader" output="screen"/>
     <node pkg="test_pkg" type="wheel_state_reader" name="my_wheel_state_reader" output="screen"/>
 

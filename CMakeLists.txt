@@ -5,6 +5,11 @@ project(test_pkg)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs message_generation geometry_msgs sensor_msgs)
 
 ## Add custom message and services and their dependencies
+add_service_files(
+  FILES
+  Position.srv
+)
+
 generate_messages(
    DEPENDENCIES
    std_msgs

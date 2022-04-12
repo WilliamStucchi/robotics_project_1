@@ -1,0 +1,7 @@
+float32 new_x_pos
+float32 new_y_pos
+float32 new_theta_pos
+---
+float32 old_x_pos
+float32 old_y_pos
+float32 old_theta
