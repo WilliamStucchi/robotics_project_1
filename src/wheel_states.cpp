@@ -3,6 +3,7 @@
 #include "geometry_msgs/TwistStamped.h"
 #include "geometry_msgs/PoseStamped.h"
 #include <geometry_msgs/TransformStamped.h>
+#include <nav_msgs/Odometry.h>
 
 #include <sstream>
 #include <cmath>
@@ -21,8 +22,23 @@ public:
     // the parameter 'this' at the end is MANDATORY [ otherwise everything explodes :( ]
     this->sub_reader = this->n.subscribe("wheel_states", 1000, &WheelState::wheelStatePrint, this);
     this->sub_pose = this->n.subscribe("robot/pose", 1000, &WheelState::robotPoseCheck, this);
-    this->pub = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
+    this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
+    this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1000);
     this->first_read = 0;
+  }
+
+  void publishVelocity() {
+    geometry_msgs::TwistStamped cmd_vel;
+    cmd_vel.header.stamp = ros::Time::now();
+    cmd_vel.header.frame_id = "world";
+    cmd_vel.twist.linear.x = this->v_bx_ticks;
+    cmd_vel.twist.linear.y = this->v_by_ticks;
+    cmd_vel.twist.linear.z = 0;
+    cmd_vel.twist.angular.x = 0;
+    cmd_vel.twist.angular.y = 0;
+    cmd_vel.twist.angular.z = this->w_bz_ticks;
+
+    this->pub_velocity.publish(cmd_vel);
   }
 
   void robotPoseCheck(const geometry_msgs::PoseStamped::ConstPtr &msg) {
@@ -35,6 +51,8 @@ public:
     ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru);
     ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru);
     ROS_INFO("[%d]\n\tTH: [%lf]", this->seq_number, this->curr_theta);
+    //ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
+    //ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
 
     this->seq_number++;
 
@@ -52,7 +70,28 @@ public:
     ROS_INFO("[%d]w: [%lf]", this->seq_number, transformStamped.transform.rotation.w);
 */
 
+    nav_msgs::Odometry odom;
+    odom.header.stamp = ros::Time::now();
+    odom.header.frame_id = "wolrd";
+    odom.child_frame_id = "robot";
+    odom.pose.pose.position.x = this->curr_x_ru;
+    odom.pose.pose.position.y = this->curr_y_ru;
+    odom.pose.pose.position.z = 0;
+    odom.pose.pose.orientation.x = q.x();
+    odom.pose.pose.orientation.y = q.y();
+    odom.pose.pose.orientation.z = q.z();
+    odom.pose.pose.orientation.w = q.w();
+    odom.twist.twist.linear.x = this->v_bx_ticks;
+    odom.twist.twist.linear.y = this->v_by_ticks;
+    odom.twist.twist.linear.z = 0;
+    odom.twist.twist.angular.x = 0;
+    odom.twist.twist.angular.y = 0;
+    odom.twist.twist.angular.z = this->w_bz_ticks;
+
+    this->pub_odometry.publish(odom);
   }
+
+
 
   void wheelStatePrint(const sensor_msgs::JointState::ConstPtr &msg) {
 
@@ -136,9 +175,9 @@ public:
       float w_rl_ticks = ((delta_ticks_rl/delta_nsec_norm)/(N*T))*2*3.14;
       float w_rr_ticks = ((delta_ticks_rr/delta_nsec_norm)/(N*T))*2*3.14;
 
-      float w_bz_ticks = (R * (w_rr_ticks - w_fl_ticks))/(2 * (L+W));
-      float v_bx_ticks = 0.5 * R * (w_fr_ticks + w_fl_ticks);
-      float v_by_ticks = (-W-L) * w_bz_ticks + v_bx_ticks - R * w_fl_ticks;
+      this->w_bz_ticks = (R * (w_rr_ticks - w_fl_ticks))/(2 * (L+W));
+      this->v_bx_ticks = 0.5 * R * (w_fr_ticks + w_fl_ticks);
+      this->v_by_ticks = (-W-L) * w_bz_ticks + v_bx_ticks - R * w_fl_ticks;
 
 /*
     // RPM
@@ -170,37 +209,29 @@ public:
       ROS_INFO(" v_by: [%lf]", v_by_ticks);
   */
 
-      geometry_msgs::TwistStamped cmd_vel;
-      cmd_vel.header.stamp = ros::Time::now();
-      cmd_vel.header.frame_id = "world";
-      cmd_vel.twist.linear.x = v_bx_ticks;
-      cmd_vel.twist.linear.y = v_by_ticks;
-      cmd_vel.twist.linear.z = 0;
-      cmd_vel.twist.angular.x = 0;
-      cmd_vel.twist.angular.y = 0;
-      cmd_vel.twist.angular.z = w_bz_ticks;
-
-      pub.publish(cmd_vel);
+      publishVelocity();
 
 
       // ------------------- Odometry
       // add service for initial position
       // add parameter for integeration method
 
-      float robot_velocity = sqrt(pow(v_bx_ticks, 2) + pow(v_by_ticks, 2));
-      float cos_x = cos(this->curr_theta + ((w_bz_ticks*delta_nsec_norm)/2));
-      float sin_x = sin(this->curr_theta + ((w_bz_ticks*delta_nsec_norm)/2));
-      //ROS_INFO("[%d]velocity: [%lf]", this->seq_number, robot_velocity);
-      //ROS_INFO("[%d]cos: [%lf]", this->seq_number, cos_x);
-      //ROS_INFO("[%d]sin: [%lf]", this->seq_number, sin_x);
+      float robot_velocity = sqrt(pow(this->v_bx_ticks, 2) + pow(this->v_by_ticks, 2));
+      float cos_x = cos(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
+      float sin_x = sin(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
+/*
+      ROS_INFO("\n[%d]velocity: [%lf]\n", this->seq_number, robot_velocity);
+      ROS_INFO("[%d]cos: [%lf]\n", this->seq_number, cos_x);
+      ROS_INFO("[%d]sin: [%lf]\n", this->seq_number, sin_x);
+      ROS_INFO("[%d]delta: [%lf]\n", this->seq_number, delta_nsec_norm);
+*/
+      float next_x_eu = this->curr_x_eu + this->v_bx_ticks*delta_nsec_norm;
+      float next_y_eu = this->curr_y_eu + this->v_by_ticks*delta_nsec_norm;
 
-      float next_x_eu = this->curr_x_eu + v_bx_ticks*delta_nsec_norm;
-      float next_y_eu = this->curr_y_eu + v_by_ticks*delta_nsec_norm;
+      float next_x_ru = this->curr_x_ru + (robot_velocity * delta_nsec_norm * cos_x);
+      float next_y_ru = this->curr_y_ru + (robot_velocity * delta_nsec_norm * sin_x);
 
-      float next_x_ru = this->curr_x_ru + robot_velocity * delta_nsec_norm * cos_x;
-      float next_y_ru = this->curr_y_ru + robot_velocity * delta_nsec_norm * sin_x;
-
-      float next_theta = this->curr_theta + w_bz_ticks*delta_nsec_norm;
+      float next_theta = this->curr_theta + this->w_bz_ticks*delta_nsec_norm;
 
       this->curr_x_eu = next_x_eu;
       this->curr_y_eu = next_y_eu;
@@ -218,7 +249,11 @@ private:
   ros::NodeHandle n;
   ros::Subscriber sub_reader;
   ros::Subscriber sub_pose;
-  ros::Publisher pub;
+  ros::Publisher pub_velocity;
+  ros::Publisher pub_odometry;
+  float w_bz_ticks;
+  float v_bx_ticks;
+  float v_by_ticks;
 
   int seq_number = 143997;
 
