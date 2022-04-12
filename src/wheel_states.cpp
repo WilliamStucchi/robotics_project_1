@@ -2,9 +2,11 @@
 #include "sensor_msgs/JointState.h"
 #include "geometry_msgs/TwistStamped.h"
 #include "geometry_msgs/PoseStamped.h"
-#include <geometry_msgs/TransformStamped.h>
-#include <nav_msgs/Odometry.h>
+#include "geometry_msgs/TransformStamped.h"
+#include "nav_msgs/Odometry.h"
 #include "test_pkg/Position.h"
+#include "dynamic_reconfigure/server.h"
+#include "pub_sub/parametersConfig.h"
 
 #include <sstream>
 #include <cmath>
@@ -25,6 +27,7 @@ public:
     this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
     this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1000);
     this->position_server = this->n.advertiseService("reset_pos", &WheelState::positionService, this);
+    //this->f = &WheelState::dynConfig;
     this->first_read = 0;
 
     this->n.getParam("/pos_x", this->curr_x_ru);
@@ -75,12 +78,13 @@ public:
 
     float x_diff_ru = this->curr_x_ru - msg->pose.position.x;
     float y_diff_ru = this->curr_y_ru - msg->pose.position.y;
-
+/*
     ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru);
     ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru);
     ROS_INFO("[%d]\n\tTH: [%lf]", this->seq_number, this->curr_theta);
-    //ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
-    //ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
+*/
+    ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
+    ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
 
     this->seq_number++;
 
@@ -237,12 +241,12 @@ public:
       float robot_velocity = sqrt(pow(this->v_bx_ticks, 2) + pow(this->v_by_ticks, 2));
       float cos_x = cos(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
       float sin_x = sin(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
-/*
+
       ROS_INFO("\n[%d]velocity: [%lf]\n", this->seq_number, robot_velocity);
       ROS_INFO("[%d]cos: [%lf]\n", this->seq_number, cos_x);
       ROS_INFO("[%d]sin: [%lf]\n", this->seq_number, sin_x);
-      ROS_INFO("[%d]delta: [%lf]\n", this->seq_number, delta_nsec_norm);
-*/
+      ROS_INFO("[%d]deltaT: [%lf]\n", this->seq_number, delta_nsec_norm);
+
       float next_x_eu = this->curr_x_eu + this->v_bx_ticks*delta_nsec_norm;
       float next_y_eu = this->curr_y_eu + this->v_by_ticks*delta_nsec_norm;
 
@@ -270,6 +274,10 @@ private:
   ros::Publisher pub_velocity;
   ros::Publisher pub_odometry;
   ros::ServiceServer position_server;
+  //dynamic_reconfigure::Server<test_pkg::parametersConfig> dynServer;
+  //dynamic_reconfigure::Server< pub_sub::parametersConfig>::CallbackType f;
+
+
   float w_bz_ticks;
   float v_bx_ticks;
   float v_by_ticks;
