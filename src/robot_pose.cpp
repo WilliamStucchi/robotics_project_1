@@ -20,7 +20,7 @@ public:
     // position(x,y,z) and orientation(x,y,z,w)
     // to access values you need to do like down here
 
-
+/*
     ROS_INFO("pose:");
     ROS_INFO(" position:");
     ROS_INFO("\t x: [%lf]", msg->pose.position.x);
@@ -31,6 +31,7 @@ public:
     ROS_INFO("\t y: [%lf]", msg->pose.orientation.y);
     ROS_INFO("\t z: [%lf]", msg->pose.orientation.z);
     ROS_INFO("\t z: [%lf]", msg->pose.orientation.w);
+*/
   }
 
   void run() {
