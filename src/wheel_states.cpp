@@ -5,12 +5,16 @@
 #include "geometry_msgs/TransformStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "test_pkg/Position.h"
+
 #include <dynamic_reconfigure/server.h>
 #include <test_pkg/parametersConfig.h>
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_broadcaster.h>
+
 #include <sstream>
 #include <cmath>
-#include <tf2/LinearMath/Quaternion.h>
+
 
 #define T 5
 #define N 42
@@ -97,11 +101,15 @@ public:
 
   // Odpmetry publisher callback
   void robotPoseCheck(const geometry_msgs::PoseStamped::ConstPtr &msg) {
+
+    // Just for debug
     float x_diff_eu = this->curr_x_eu - msg->pose.position.x;
     float y_diff_eu = this->curr_y_eu - msg->pose.position.y;
 
     float x_diff_ru = this->curr_x_ru - msg->pose.position.x;
     float y_diff_ru = this->curr_y_ru - msg->pose.position.y;
+    // -------------------
+
 /*
     ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru);
     ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru);
@@ -110,8 +118,7 @@ public:
     ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
     ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
 */
-    this->seq_number++;
-
+/*
     geometry_msgs::TransformStamped transformStamped;
     tf2::Quaternion q;
     q.setRPY(0, 0, this->curr_theta);
@@ -119,6 +126,7 @@ public:
     transformStamped.transform.rotation.y = q.y();
     transformStamped.transform.rotation.z = q.y();
     transformStamped.transform.rotation.w = q.w();
+*/
 /*
     ROS_INFO("[%d]x: [%lf]", this->seq_number, transformStamped.transform.rotation.x);
     ROS_INFO("[%d]y: [%lf]", this->seq_number, transformStamped.transform.rotation.y);
@@ -126,6 +134,33 @@ public:
     ROS_INFO("[%d]w: [%lf]", this->seq_number, transformStamped.transform.rotation.w);
 */
 
+    // TF Broadcast
+    geometry_msgs::TransformStamped transformStamped;
+    transformStamped.header.stamp = ros::Time::now();
+    transformStamped.header.frame_id = "world";
+    transformStamped.child_frame_id = "turtle";
+
+
+    if(this->integration_mth == 0) {
+      transformStamped.transform.translation.x = this->curr_x_eu;
+      transformStamped.transform.translation.y = this->curr_y_eu;
+    } else {
+      transformStamped.transform.translation.x = this->curr_x_ru;
+      transformStamped.transform.translation.y = this->curr_y_ru;
+    }
+
+    transformStamped.transform.translation.z = 0.0;
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, this->curr_theta);
+    transformStamped.transform.rotation.x = q.x();
+    transformStamped.transform.rotation.y = q.y();
+    transformStamped.transform.rotation.z = q.y();
+    transformStamped.transform.rotation.w = q.w();
+    br.sendTransform(transformStamped);
+
+
+    // Publish Odometry
     nav_msgs::Odometry odom;
     odom.header.stamp = ros::Time::now();
     odom.header.frame_id = "wolrd";
@@ -152,6 +187,8 @@ public:
     odom.twist.twist.angular.z = this->w_bz_ticks;
 
     this->pub_odometry.publish(odom);
+
+    this->seq_number++;
   }
 
   // Main body of the node
@@ -315,12 +352,18 @@ private:
   dynamic_reconfigure::Server<test_pkg::parametersConfig> dynServer;
   dynamic_reconfigure::Server<test_pkg::parametersConfig>::CallbackType f;
 
+  // TF Broadcaster
+  tf2_ros::TransformBroadcaster br;
+  //tf::Transform transform;
+
   // Utility
   float w_bz_ticks;
   float v_bx_ticks;
   float v_by_ticks;
 
+  // Just for debug
   int seq_number = 143997;
+  // -----
 
   int first_read;
   int prev_ticks_fl;
