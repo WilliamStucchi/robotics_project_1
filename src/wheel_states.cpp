@@ -5,8 +5,8 @@
 #include "geometry_msgs/TransformStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "test_pkg/Position.h"
-#include "dynamic_reconfigure/server.h"
-#include "pub_sub/parametersConfig.h"
+#include <dynamic_reconfigure/server.h>
+#include <test_pkg/parametersConfig.h>
 
 #include <sstream>
 #include <cmath>
@@ -22,12 +22,23 @@ class WheelState {
 public:
 
   WheelState() {
+    // Subscribers
     this->sub_reader = this->n.subscribe("wheel_states", 1000, &WheelState::wheelStatePrint, this);
     this->sub_pose = this->n.subscribe("robot/pose", 1000, &WheelState::robotPoseCheck, this);
+
+    // Publishers
     this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
     this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1000);
+
+    // Service server
     this->position_server = this->n.advertiseService("reset_pos", &WheelState::positionService, this);
-    //this->f = &WheelState::dynConfig;
+
+    // Dynamic reconfigure
+    this->f = boost::bind(&WheelState::dynConfig, this, _1, _2);
+    this->dynServer.setCallback(f);
+
+
+    // Utility
     this->first_read = 0;
 
     this->n.getParam("/pos_x", this->curr_x_ru);
@@ -39,6 +50,16 @@ public:
 
   }
 
+  // Dynamic reconfigure callback
+  void dynConfig(test_pkg::parametersConfig &config, uint32_t level) {
+    ROS_INFO("Reconfigure Request: %d - Level %d",
+              config.mth,
+              level);
+
+    this->integration_mth = config.mth;
+  }
+
+  // Service server callback
   bool positionService(test_pkg::Position::Request &req, test_pkg::Position::Response &res) {
     res.old_x_pos = this->curr_x_ru;
     res.old_y_pos = this->curr_y_ru;
@@ -58,6 +79,7 @@ public:
 
   }
 
+  // Velocity publisher callback
   void publishVelocity() {
     geometry_msgs::TwistStamped cmd_vel;
     cmd_vel.header.stamp = ros::Time::now();
@@ -72,6 +94,8 @@ public:
     this->pub_velocity.publish(cmd_vel);
   }
 
+
+  // Odpmetry publisher callback
   void robotPoseCheck(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     float x_diff_eu = this->curr_x_eu - msg->pose.position.x;
     float y_diff_eu = this->curr_y_eu - msg->pose.position.y;
@@ -106,8 +130,15 @@ public:
     odom.header.stamp = ros::Time::now();
     odom.header.frame_id = "wolrd";
     odom.child_frame_id = "robot";
-    odom.pose.pose.position.x = this->curr_x_ru;
-    odom.pose.pose.position.y = this->curr_y_ru;
+
+    if(this->integration_mth == 0) {
+      odom.pose.pose.position.x = this->curr_x_eu;
+      odom.pose.pose.position.y = this->curr_y_eu;
+    } else {
+      odom.pose.pose.position.x = this->curr_x_ru;
+      odom.pose.pose.position.y = this->curr_y_ru;
+    }
+
     odom.pose.pose.position.z = 0;
     odom.pose.pose.orientation.x = q.x();
     odom.pose.pose.orientation.y = q.y();
@@ -123,8 +154,7 @@ public:
     this->pub_odometry.publish(odom);
   }
 
-
-
+  // Main body of the node
   void wheelStatePrint(const sensor_msgs::JointState::ConstPtr &msg) {
 
     // ------------------- V & W
@@ -269,15 +299,23 @@ public:
 
 private:
   ros::NodeHandle n;
+
+  // Subscribers
   ros::Subscriber sub_reader;
   ros::Subscriber sub_pose;
+
+  // Publishers
   ros::Publisher pub_velocity;
   ros::Publisher pub_odometry;
+
+  // Service server
   ros::ServiceServer position_server;
-  //dynamic_reconfigure::Server<test_pkg::parametersConfig> dynServer;
-  //dynamic_reconfigure::Server< pub_sub::parametersConfig>::CallbackType f;
 
+  // Dynamic reconfigure
+  dynamic_reconfigure::Server<test_pkg::parametersConfig> dynServer;
+  dynamic_reconfigure::Server<test_pkg::parametersConfig>::CallbackType f;
 
+  // Utility
   float w_bz_ticks;
   float v_bx_ticks;
   float v_by_ticks;
@@ -298,10 +336,11 @@ private:
   float curr_y_ru;
   float curr_theta;
 
+  int integration_mth = 0;
 };
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "wheel_state_reader");
+  ros::init(argc, argv, "wheel_states");
 
   WheelState wheel_state;
   wheel_state.run();

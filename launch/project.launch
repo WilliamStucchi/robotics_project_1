@@ -4,6 +4,6 @@
     <param name="pos_y" value="0.0" />
     <param name="theta" value="0.0" />
     <node pkg="test_pkg" type="velocity_reader" name="my_velcity_reader" output="screen"/>
-    <node pkg="test_pkg" type="wheel_state_reader" name="my_wheel_state_reader" output="screen"/>
+    <node pkg="test_pkg" type="wheel_states" name="my_wheel_state_reader" output="screen"/>
 
 </launch>
