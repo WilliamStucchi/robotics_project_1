@@ -12,6 +12,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+#define _USE_MATH_DEFINES
 #include <sstream>
 #include <cmath>
 
@@ -83,22 +84,6 @@ public:
 
   }
 
-  // Velocity publisher callback
-  void publishVelocity() {
-    geometry_msgs::TwistStamped cmd_vel;
-    cmd_vel.header.stamp = ros::Time::now();
-    cmd_vel.header.frame_id = "world";
-    cmd_vel.twist.linear.x = this->v_bx_ticks;
-    cmd_vel.twist.linear.y = this->v_by_ticks;
-    cmd_vel.twist.linear.z = 0;
-    cmd_vel.twist.angular.x = 0;
-    cmd_vel.twist.angular.y = 0;
-    cmd_vel.twist.angular.z = this->w_bz_ticks;
-
-    this->pub_velocity.publish(cmd_vel);
-  }
-
-
   // Odpmetry publisher callback
   void robotPoseCheck(const geometry_msgs::PoseStamped::ConstPtr &msg) {
 
@@ -106,15 +91,34 @@ public:
     float x_diff_eu = this->curr_x_eu - msg->pose.position.x;
     float y_diff_eu = this->curr_y_eu - msg->pose.position.y;
 
+    if(this->max_x_eu < x_diff_eu) {
+      this->max_x_eu = x_diff_eu;
+    }
+    if(this->max_y_eu < y_diff_eu) {
+      this->max_y_eu = y_diff_eu;
+    }
+
     float x_diff_ru = this->curr_x_ru - msg->pose.position.x;
     float y_diff_ru = this->curr_y_ru - msg->pose.position.y;
+
+    if(this->max_x_ru < x_diff_ru) {
+      this->max_x_ru = x_diff_ru;
+    }
+    if(this->max_y_ru < y_diff_ru) {
+      this->max_y_ru = y_diff_ru;
+    }
     // -------------------
 
 /*
-    ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru);
-    ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru);
+    ROS_INFO("[%d] maxEUX: [%f] --- maxRUX: [%f]", this->seq_number, this->max_x_eu, this->max_x_ru);
+    ROS_INFO("[%d] maxEUY: [%f] --- maxRUY: [%f]", this->seq_number, this->max_y_eu, this->max_y_ru);
+*/
+/*
+    ROS_INFO("[%d]\n\tcurrX:[%lf]\n\t-eulerX:[%lf]\n\t-rungeX[%lf]\n\tdiffX[%lf]", this->seq_number, this->curr_x_ru, x_diff_eu, x_diff_ru, x_diff_eu - x_diff_ru);
+    ROS_INFO("[%d]\n\tcurrY:[%lf]\n\t-eluerY:[%lf]\n\t-rungeY[%lf]\n\tdiffY[%lf]", this->seq_number, this->curr_y_ru, y_diff_eu, y_diff_ru, y_diff_eu - y_diff_ru);
     ROS_INFO("[%d]\n\tTH: [%lf]", this->seq_number, this->curr_theta);
-
+*/
+/*
     ROS_INFO("[%d]currX: [%lf]\n", this->seq_number, this->curr_x_ru);
     ROS_INFO("[%d]currY: [%lf]\n", this->seq_number, this->curr_y_ru);
 */
@@ -138,7 +142,7 @@ public:
     geometry_msgs::TransformStamped transformStamped;
     transformStamped.header.stamp = ros::Time::now();
     transformStamped.header.frame_id = "world";
-    transformStamped.child_frame_id = "turtle";
+    transformStamped.child_frame_id = "robot";
 
 
     if(this->integration_mth == 0) {
@@ -191,6 +195,41 @@ public:
     this->seq_number++;
   }
 
+  // Velocity publisher callback
+  void publishVelocity() {
+    geometry_msgs::TwistStamped cmd_vel;
+    cmd_vel.header.stamp = ros::Time::now();
+    cmd_vel.header.frame_id = "world";
+    cmd_vel.twist.linear.x = this->v_bx_ticks;
+    cmd_vel.twist.linear.y = this->v_by_ticks;
+    cmd_vel.twist.linear.z = 0;
+    cmd_vel.twist.angular.x = 0;
+    cmd_vel.twist.angular.y = 0;
+    cmd_vel.twist.angular.z = this->w_bz_ticks;
+
+    this->pub_velocity.publish(cmd_vel);
+  }
+
+  float computeWheelW(float delta_ticks, float delta_nsec) {
+    return ((delta_ticks/delta_nsec)/(N*T))*2*M_PI;
+  }
+
+  float computeRobotW(float w_rr, float w_fl) {
+    return (R * (w_rr - w_fl)) / (2 * (L+W));
+  }
+
+  float computeRobotVX(float w_fr, float w_fl) {
+    return 0.5 * R * (w_fr + w_fl);
+  }
+
+  float computeRobotVY(float w_bz, float v_bx, float w_fl) {
+    return (-W-L) * w_bz + v_bx - R * w_fl;
+  }
+
+  float computeRobotVelocity(float v_bx, float v_by) {
+    return sqrt(pow(v_bx, 2) + pow(v_by, 2));
+  }
+
   // Main body of the node
   void wheelStatePrint(const sensor_msgs::JointState::ConstPtr &msg) {
 
@@ -205,19 +244,25 @@ public:
     int delta_ticks_rl = 0;
     int delta_ticks_rr = 0;
 
-    int curr_sec = 0;
-    int curr_nsec = 0;
+    long int curr_sec = 0;
+    long int curr_nsec = 0;
     //int delta_sec = 0;
     float delta_nsec = 0;
     float delta_nsec_norm;
 
     if(first_read == 0) {
+      // ticks
       this->prev_ticks_fl = msg->position[0];
       this->prev_ticks_fr = msg->position[1];
       this->prev_ticks_rl = msg->position[2];
       this->prev_ticks_rr = msg->position[3];
+
+      // time
       this->prev_sec = msg->header.stamp.sec;
-      this->prev_nsec = 1000000000*this->prev_sec + msg->header.stamp.nsec;
+      this->prev_nsec = pow(10, 9)*this->prev_sec + msg->header.stamp.nsec;
+      //ROS_INFO("sec: %ld", this->prev_sec);
+      //ROS_INFO("nsec: %ld", this->prev_nsec);
+
       this->first_read = 1;
     } else {
       curr_ticks_fl = msg->position[0];
@@ -236,37 +281,36 @@ public:
       ROS_INFO("RL: %d", delta_ticks_rl);
       ROS_INFO("RR: %d", delta_ticks_rr);
 */
+
       this->prev_ticks_fl = curr_ticks_fl;
       this->prev_ticks_fr = curr_ticks_fr;
       this->prev_ticks_rl = curr_ticks_rl;
       this->prev_ticks_rr = curr_ticks_rr;
 
+      // time
       curr_sec = msg->header.stamp.sec;
-      curr_nsec = 1000000000*curr_sec + msg->header.stamp.nsec;
-      //delta_sec = curr_sec - this->prev_sec;
+      curr_nsec = pow(10, 9)*curr_sec + msg->header.stamp.nsec;
       delta_nsec = curr_nsec - this->prev_nsec;
-
-      //ROS_INFO("sec: %d", delta_sec);
-      //ROS_INFO("nsec: %d", delta_nsec);
+      delta_nsec_norm = (pow(10, -9) * delta_nsec);
+      //ROS_INFO("nsec: %lf", delta_nsec);
+      //ROS_INFO("nsec: %f", delta_nsec_norm);
 
       this->prev_sec = curr_sec;
       this->prev_nsec = curr_nsec;
 
 
-      delta_nsec_norm = (0.000000001*delta_nsec);
-
-
-      //ROS_INFO("scala: %lf", ((delta_ticks_fl/(0.000000001*delta_nsec))/(N*T)));
-
       // TICKS
-      float w_fl_ticks = ((delta_ticks_fl/delta_nsec_norm)/(N*T))*2*3.14;
-      float w_fr_ticks = ((delta_ticks_fr/delta_nsec_norm)/(N*T))*2*3.14;
-      float w_rl_ticks = ((delta_ticks_rl/delta_nsec_norm)/(N*T))*2*3.14;
-      float w_rr_ticks = ((delta_ticks_rr/delta_nsec_norm)/(N*T))*2*3.14;
+      float w_fl_ticks = computeWheelW(delta_ticks_fl, delta_nsec_norm);
+      float w_fr_ticks = computeWheelW(delta_ticks_fr, delta_nsec_norm);
+      float w_rl_ticks = computeWheelW(delta_ticks_rl, delta_nsec_norm);
+      float w_rr_ticks = computeWheelW(delta_ticks_rr, delta_nsec_norm);
+      //ROS_INFO("w_rr: %f", w_rr_ticks);
 
-      this->w_bz_ticks = (R * (w_rr_ticks - w_fl_ticks))/(2 * (L+W));
-      this->v_bx_ticks = 0.5 * R * (w_fr_ticks + w_fl_ticks);
-      this->v_by_ticks = (-W-L) * w_bz_ticks + v_bx_ticks - R * w_fl_ticks;
+      this->w_bz_ticks = computeRobotW(w_rr_ticks, w_fl_ticks);
+      this->v_bx_ticks = computeRobotVX(w_fr_ticks, w_fl_ticks);
+      this->v_by_ticks = computeRobotVY(this->w_bz_ticks, this->v_bx_ticks, w_fl_ticks);
+      //ROS_INFO("v_bx: %f", this->v_bx_ticks);
+      ROS_INFO("v_by: %f", this->v_by_ticks);
 
 /*
     // RPM
@@ -302,25 +346,26 @@ public:
 
 
       // ------------------- Odometry
-      // add service for initial position
-      // add parameter for integeration method
-
-      float robot_velocity = sqrt(pow(this->v_bx_ticks, 2) + pow(this->v_by_ticks, 2));
-      float cos_x = cos(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
-      float sin_x = sin(this->curr_theta + ((this->w_bz_ticks*delta_nsec_norm)/2.0));
+      float robot_velocity = computeRobotVelocity(this->v_bx_ticks, this->v_by_ticks);
+      float cos_x = cos(this->curr_theta + ((this->w_bz_ticks * delta_nsec_norm) / 2.0));
+      float sin_x = sin(this->curr_theta + ((this->w_bz_ticks * delta_nsec_norm) / 2.0));
+/*
+      ROS_INFO("cos: [%f] --- sin:[%f]", cos_x, sin_x);
+      ROS_INFO("theta: [%f]", this->curr_theta);
+*/
 /*
       ROS_INFO("\n[%d]velocity: [%lf]\n", this->seq_number, robot_velocity);
       ROS_INFO("[%d]cos: [%lf]\n", this->seq_number, cos_x);
       ROS_INFO("[%d]sin: [%lf]\n", this->seq_number, sin_x);
       ROS_INFO("[%d]deltaT: [%lf]\n", this->seq_number, delta_nsec_norm);
 */
-      float next_x_eu = this->curr_x_eu + this->v_bx_ticks*delta_nsec_norm;
-      float next_y_eu = this->curr_y_eu + this->v_by_ticks*delta_nsec_norm;
+      float next_x_eu = this->curr_x_eu + this->v_bx_ticks * delta_nsec_norm;
+      float next_y_eu = this->curr_y_eu + this->v_by_ticks * delta_nsec_norm;
 
       float next_x_ru = this->curr_x_ru + (robot_velocity * delta_nsec_norm * cos_x);
       float next_y_ru = this->curr_y_ru + (robot_velocity * delta_nsec_norm * sin_x);
 
-      float next_theta = this->curr_theta + this->w_bz_ticks*delta_nsec_norm;
+      float next_theta = this->curr_theta + this->w_bz_ticks * delta_nsec_norm;
 
       this->curr_x_eu = next_x_eu;
       this->curr_y_eu = next_y_eu;
@@ -370,8 +415,8 @@ private:
   int prev_ticks_fr;
   int prev_ticks_rl;
   int prev_ticks_rr;
-  int prev_sec;
-  int prev_nsec;
+  long int prev_sec;
+  long int prev_nsec;
 
   float curr_x_eu;
   float curr_y_eu;
@@ -380,6 +425,11 @@ private:
   float curr_theta;
 
   int integration_mth = 0;
+
+  float max_x_eu = 0;
+  float max_y_eu = 0;
+  float max_x_ru = 0;
+  float max_y_ru = 0;
 };
 
 int main(int argc, char **argv) {
