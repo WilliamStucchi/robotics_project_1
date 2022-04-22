@@ -17,8 +17,8 @@
 #include <cmath>
 
 
-#define T 5
-#define N 42
+#define T 5.0
+#define N 42.0
 #define R 0.07
 #define L 0.2
 #define W 0.169
@@ -84,7 +84,7 @@ public:
 
   }
 
-  // Odpmetry publisher callback
+  // Odometry publisher callback
   void robotPoseCheck(const geometry_msgs::PoseStamped::ConstPtr &msg) {
 
     // Just for debug
@@ -138,11 +138,48 @@ public:
     ROS_INFO("[%d]w: [%lf]", this->seq_number, transformStamped.transform.rotation.w);
 */
 
+    this->seq_number++;
+  }
+
+  void publishOdom() {
+    // Publish Odometry
+    nav_msgs::Odometry odom;
+    odom.header.stamp = ros::Time::now();
+    odom.header.frame_id = "wolrd";
+    odom.child_frame_id = "robot";
+
+    if(this->integration_mth == 0) {
+      odom.pose.pose.position.x = this->curr_x_eu;
+      odom.pose.pose.position.y = this->curr_y_eu;
+    } else {
+      odom.pose.pose.position.x = this->curr_x_ru;
+      odom.pose.pose.position.y = this->curr_y_ru;
+    }
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, this->curr_theta);
+
+    odom.pose.pose.position.z = 0;
+    odom.pose.pose.orientation.x = q.x();
+    odom.pose.pose.orientation.y = q.y();
+    odom.pose.pose.orientation.z = q.z();
+    odom.pose.pose.orientation.w = q.w();
+    odom.twist.twist.linear.x = this->v_bx_ticks;
+    odom.twist.twist.linear.y = this->v_by_ticks;
+    odom.twist.twist.linear.z = 0;
+    odom.twist.twist.angular.x = 0;
+    odom.twist.twist.angular.y = 0;
+    odom.twist.twist.angular.z = this->w_bz_ticks;
+
+    this->pub_odometry.publish(odom);
+  }
+
+  void publishTF() {
     // TF Broadcast
     geometry_msgs::TransformStamped transformStamped;
     transformStamped.header.stamp = ros::Time::now();
-    transformStamped.header.frame_id = "world";
-    transformStamped.child_frame_id = "robot";
+    transformStamped.header.frame_id = "odom";
+    transformStamped.child_frame_id = "base_link";
 
 
     if(this->integration_mth == 0) {
@@ -159,40 +196,9 @@ public:
     q.setRPY(0, 0, this->curr_theta);
     transformStamped.transform.rotation.x = q.x();
     transformStamped.transform.rotation.y = q.y();
-    transformStamped.transform.rotation.z = q.y();
+    transformStamped.transform.rotation.z = q.z();
     transformStamped.transform.rotation.w = q.w();
     br.sendTransform(transformStamped);
-
-
-    // Publish Odometry
-    nav_msgs::Odometry odom;
-    odom.header.stamp = ros::Time::now();
-    odom.header.frame_id = "wolrd";
-    odom.child_frame_id = "robot";
-
-    if(this->integration_mth == 0) {
-      odom.pose.pose.position.x = this->curr_x_eu;
-      odom.pose.pose.position.y = this->curr_y_eu;
-    } else {
-      odom.pose.pose.position.x = this->curr_x_ru;
-      odom.pose.pose.position.y = this->curr_y_ru;
-    }
-
-    odom.pose.pose.position.z = 0;
-    odom.pose.pose.orientation.x = q.x();
-    odom.pose.pose.orientation.y = q.y();
-    odom.pose.pose.orientation.z = q.z();
-    odom.pose.pose.orientation.w = q.w();
-    odom.twist.twist.linear.x = this->v_bx_ticks;
-    odom.twist.twist.linear.y = this->v_by_ticks;
-    odom.twist.twist.linear.z = 0;
-    odom.twist.twist.angular.x = 0;
-    odom.twist.twist.angular.y = 0;
-    odom.twist.twist.angular.z = this->w_bz_ticks;
-
-    this->pub_odometry.publish(odom);
-
-    this->seq_number++;
   }
 
   // Velocity publisher callback
@@ -233,8 +239,6 @@ public:
   // Main body of the node
   void wheelStatePrint(const sensor_msgs::JointState::ConstPtr &msg) {
 
-    // ------------------- V & W
-
     int curr_ticks_fl = 0;
     int curr_ticks_fr = 0;
     int curr_ticks_rl = 0;
@@ -251,6 +255,8 @@ public:
     float delta_nsec_norm;
 
     if(first_read == 0) {
+      // ------------------- Initilization
+
       // ticks
       this->prev_ticks_fl = msg->position[0];
       this->prev_ticks_fr = msg->position[1];
@@ -264,7 +270,10 @@ public:
       //ROS_INFO("nsec: %ld", this->prev_nsec);
 
       this->first_read = 1;
+
     } else {
+      // ------------------- compute
+
       curr_ticks_fl = msg->position[0];
       curr_ticks_fr = msg->position[1];
       curr_ticks_rl = msg->position[2];
@@ -299,18 +308,19 @@ public:
       this->prev_nsec = curr_nsec;
 
 
-      // TICKS
+      // ------------------- TICKS
       float w_fl_ticks = computeWheelW(delta_ticks_fl, delta_nsec_norm);
       float w_fr_ticks = computeWheelW(delta_ticks_fr, delta_nsec_norm);
       float w_rl_ticks = computeWheelW(delta_ticks_rl, delta_nsec_norm);
       float w_rr_ticks = computeWheelW(delta_ticks_rr, delta_nsec_norm);
       //ROS_INFO("w_rr: %f", w_rr_ticks);
 
+      // ------------------- Velocity
       this->w_bz_ticks = computeRobotW(w_rr_ticks, w_fl_ticks);
       this->v_bx_ticks = computeRobotVX(w_fr_ticks, w_fl_ticks);
       this->v_by_ticks = computeRobotVY(this->w_bz_ticks, this->v_bx_ticks, w_fl_ticks);
       //ROS_INFO("v_bx: %f", this->v_bx_ticks);
-      ROS_INFO("v_by: %f", this->v_by_ticks);
+      //ROS_INFO("v_by: %f", this->v_by_ticks);
 
 /*
     // RPM
@@ -331,7 +341,7 @@ public:
       float v_bx_rpm = 0.5 * R * (w_fr_rpm + w_fl_rpm);
       float v_by_rpm = (-W-L) * w_bz_rpm + v_bx_rpm - R * w_fl_rpm;
 */
-  /*
+/*
       ROS_INFO("Wheel_state:");
       ROS_INFO(" fl: {p:[%lf],v:[%lf]->[%lf]\nticks:[%lf]}", msg->position[0], msg->velocity[0], w_fl_ticks, w_fl_ticks);
       ROS_INFO(" fr: {p:[%lf],v:[%lf]->[%lf]\nticks:[%lf]}", msg->position[1], msg->velocity[1], w_fr_ticks, w_fr_ticks);
@@ -340,15 +350,13 @@ public:
       ROS_INFO(" w_bz: [%lf]", w_bz_ticks);
       ROS_INFO(" v_bx: [%lf]", v_bx_ticks);
       ROS_INFO(" v_by: [%lf]", v_by_ticks);
-  */
-
-      publishVelocity();
-
+*/
 
       // ------------------- Odometry
       float robot_velocity = computeRobotVelocity(this->v_bx_ticks, this->v_by_ticks);
       float cos_x = cos(this->curr_theta + ((this->w_bz_ticks * delta_nsec_norm) / 2.0));
       float sin_x = sin(this->curr_theta + ((this->w_bz_ticks * delta_nsec_norm) / 2.0));
+
 /*
       ROS_INFO("cos: [%f] --- sin:[%f]", cos_x, sin_x);
       ROS_INFO("theta: [%f]", this->curr_theta);
@@ -359,6 +367,7 @@ public:
       ROS_INFO("[%d]sin: [%lf]\n", this->seq_number, sin_x);
       ROS_INFO("[%d]deltaT: [%lf]\n", this->seq_number, delta_nsec_norm);
 */
+
       float next_x_eu = this->curr_x_eu + this->v_bx_ticks * delta_nsec_norm;
       float next_y_eu = this->curr_y_eu + this->v_by_ticks * delta_nsec_norm;
 
@@ -372,6 +381,12 @@ public:
       this->curr_x_ru = next_x_ru;
       this->curr_y_ru = next_y_ru;
       this->curr_theta = next_theta;
+
+
+      // ------------------- Publishing
+      publishVelocity();
+      publishOdom();
+      publishTF();
     }
   }
 
@@ -418,11 +433,11 @@ private:
   long int prev_sec;
   long int prev_nsec;
 
-  float curr_x_eu;
-  float curr_y_eu;
-  float curr_x_ru;
-  float curr_y_ru;
-  float curr_theta;
+  float curr_x_eu = 0;
+  float curr_y_eu = 0;
+  float curr_x_ru = 0;
+  float curr_y_ru = 0;
+  float curr_theta = 0;
 
   int integration_mth = 0;
 
