@@ -18,8 +18,8 @@
 
 
 #define T 5.0
-#define N 42.0
-#define R 0.07
+#define N 41.0 // 41.0 after adjustment
+#define R 0.076 //0.076 after adjustment
 #define L 0.2
 #define W 0.169
 
@@ -273,8 +273,8 @@ public:
     return (-w_fl_ticks + w_fr_ticks - w_rl_ticks + w_rr_ticks) * R / (4 * (L + W));
   }
 
-  float computeRobotVelocity(float v_bx, float v_by) {
-    return sqrt(pow(v_bx, 2) + pow(v_by, 2));
+  float computeRobotVelocity(float vx, float vy) {
+    return sqrt(pow(vx, 2) + pow(vy, 2));
   }
 
   // Main body of the node
@@ -398,7 +398,7 @@ public:
       ROS_INFO(" v_by: [%lf]", v_by_ticks);
 */
 
-      // ------------------- World Velocity
+      // ------------------- World Velocity (maybe this needs to be printed int odom, not the base one)
       float pi_rad = (90 * M_PI) / 180;
       this->vx_world = vx_base_ticks * cos(this->curr_theta) + vy_base_ticks * cos(pi_rad + this->curr_theta);
       this->vy_world = vx_base_ticks * sin(this->curr_theta) + vy_base_ticks * sin(pi_rad + this->curr_theta);
@@ -493,7 +493,7 @@ private:
   float curr_y_ru = 0;
   float curr_theta = 0;
 
-  int integration_mth = 1;
+  int integration_mth = 0;
   bool true_pose = true;
 
   float max_x_eu = 0;
