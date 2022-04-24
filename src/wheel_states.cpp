@@ -404,7 +404,7 @@ public:
       this->vy_world = vx_base_ticks * sin(this->curr_theta) + vy_base_ticks * sin(pi_rad + this->curr_theta);
 
       // ------------------- Odometry
-      float robot_velocity = computeRobotVelocity(this->vx_base_ticks, this->vy_base_ticks);
+      float robot_velocity = computeRobotVelocity(this->vx_world, this->vy_world);
       float cos_x = cos(this->curr_theta + ((this->w_base_ticks * delta_nsec_norm) / 2.0));
       float sin_x = sin(this->curr_theta + ((this->w_base_ticks * delta_nsec_norm) / 2.0));
 
@@ -493,7 +493,7 @@ private:
   float curr_y_ru = 0;
   float curr_theta = 0;
 
-  int integration_mth = 0;
+  int integration_mth = 1;
   bool true_pose = true;
 
   float max_x_eu = 0;
