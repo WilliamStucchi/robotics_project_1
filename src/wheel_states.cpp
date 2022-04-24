@@ -28,12 +28,12 @@ public:
 
   WheelState() {
     // Subscribers
-    this->sub_reader = this->n.subscribe("wheel_states", 1000, &WheelState::wheelStatePrint, this);
-    this->sub_pose = this->n.subscribe("robot/pose", 1000, &WheelState::robotPoseCheck, this);
+    this->sub_reader = this->n.subscribe("wheel_states", 1, &WheelState::wheelStatePrint, this);
+    this->sub_pose = this->n.subscribe("robot/pose", 1, &WheelState::robotPoseCheck, this);
 
     // Publishers
-    this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1000);
-    this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1000);
+    this->pub_velocity = this->n.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1);
+    this->pub_odometry = this->n.advertise<nav_msgs::Odometry>("odom", 1);
 
     // Service server
     this->position_server = this->n.advertiseService("reset_pos", &WheelState::positionService, this);
@@ -138,7 +138,7 @@ public:
     ROS_INFO("[%d]w: [%lf]", this->seq_number, transformStamped.transform.rotation.w);
 */
 
-    // --- ROBOT TRUE POSE
+    // --- ROBOT TRUE POSE (for debug)
     if(this->true_pose) {
       geometry_msgs::TransformStamped transformStamped;
       transformStamped.header.stamp = ros::Time::now();
